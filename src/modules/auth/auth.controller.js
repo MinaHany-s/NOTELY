@@ -12,9 +12,10 @@ const isSecureDeployment =
     process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
 const REFRESH_REPLAY_GRACE_MS = 30 * 1000;
 const cookieDomain = process.env.COOKIE_DOMAIN?.trim() || undefined;
-const cookieSameSite = isSecureDeployment
-    ? "none"
-    : (process.env.COOKIE_SAME_SITE === "lax" ? "lax" : "lax");
+const configuredSameSite = process.env.COOKIE_SAME_SITE?.toLowerCase();
+const cookieSameSite = ["lax", "strict", "none"].includes(configuredSameSite)
+    ? configuredSameSite
+    : "lax";
 
 const getRefreshTokenExpiry = () => {
     return new Date(
@@ -49,7 +50,7 @@ const generateAccessToken = (user) => {
 
 const refreshCookieOptions = {
     httpOnly: true,
-    secure: isSecureDeployment ? true : process.env.COOKIE_SECURE === "true",
+    secure: isSecureDeployment || process.env.COOKIE_SECURE === "true" || cookieSameSite === "none",
     sameSite: cookieSameSite,
     path: "/api/v1/auth",
     maxAge: REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000,

@@ -145,6 +145,11 @@ REFRESH_TOKEN_SECRET=your_refresh_token_secret
 FRONTEND_URL=http://localhost:5173
 ```
 
+For production, the frontend proxies `/api/v1` through its own Vercel origin.
+Refresh cookies are host-only, HttpOnly, Secure, and SameSite=Lax by default.
+Set `COOKIE_SAME_SITE=none` only when a separate cross-site client explicitly
+needs cookie authentication; `Secure` is enforced whenever SameSite=None is used.
+
 **Important:** These are example variable names. Check the backend configuration and `.env.example` to use the exact variable names expected by the application.
 
 Never commit your `.env` file or expose your database credentials or JWT secrets.
