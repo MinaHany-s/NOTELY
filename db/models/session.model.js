@@ -27,6 +27,14 @@ const sessionSchema = new mongoose.Schema(
       type: Date,
       required: true,
     },
+    previousRefreshTokenHash: {
+      type: String,
+      default: null,
+    },
+    previousRefreshTokenExpiresAt: {
+      type: Date,
+      default: null,
+    },
 
     revokedAt: {
       type: Date,

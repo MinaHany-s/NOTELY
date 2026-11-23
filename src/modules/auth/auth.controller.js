@@ -10,6 +10,11 @@ const ACCESS_TOKEN_EXPIRY = "2h";
 const REFRESH_TOKEN_DAYS = 7;
 const isSecureDeployment =
     process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
+const REFRESH_REPLAY_GRACE_MS = 30 * 1000;
+const cookieDomain = process.env.COOKIE_DOMAIN?.trim() || undefined;
+const cookieSameSite = isSecureDeployment
+    ? "none"
+    : (process.env.COOKIE_SAME_SITE === "lax" ? "lax" : "lax");
 
 const getRefreshTokenExpiry = () => {
     return new Date(
@@ -44,10 +49,11 @@ const generateAccessToken = (user) => {
 
 const refreshCookieOptions = {
     httpOnly: true,
-    secure: isSecureDeployment,
-    sameSite: isSecureDeployment ? "none" : "lax",
+    secure: isSecureDeployment ? true : process.env.COOKIE_SECURE === "true",
+    sameSite: cookieSameSite,
     path: "/api/v1/auth",
     maxAge: REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000,
+    ...(cookieDomain ? { domain: cookieDomain } : {}),
 };
 
 const clearRefreshCookie = (res) => res.clearCookie("refreshToken", {
@@ -55,6 +61,7 @@ const clearRefreshCookie = (res) => res.clearCookie("refreshToken", {
     secure: refreshCookieOptions.secure,
     sameSite: refreshCookieOptions.sameSite,
     path: refreshCookieOptions.path,
+    ...(cookieDomain ? { domain: cookieDomain } : {}),
 });
 
 // ==================================
@@ -181,6 +188,8 @@ export const login = async (req, res, next) => {
         await Session.create({
             user: user._id,
             refreshTokenHash,
+            previousRefreshTokenHash: null,
+            previousRefreshTokenExpiresAt: null,
             userAgent: req.get("user-agent"),
             ip: req.ip,
             expiresAt: getRefreshTokenExpiry(),
@@ -228,14 +237,81 @@ export const refreshToken = async (req, res, next) => {
         }
 
         const oldRefreshTokenHash = hashRefreshToken(oldRefreshToken);
+        const now = new Date();
+        const newRefreshToken = crypto.randomBytes(64).toString("hex");
+        const newRefreshTokenHash = hashRefreshToken(newRefreshToken);
 
-        const session = await Session.findOne({
-            refreshTokenHash: oldRefreshTokenHash,
-            revokedAt: null,
-            expiresAt: { $gt: new Date() },
-        });
+        const session = await Session.findOneAndUpdate(
+            {
+                refreshTokenHash: oldRefreshTokenHash,
+                revokedAt: null,
+                expiresAt: { $gt: now },
+            },
+            [
+                {
+                    $set: {
+                        previousRefreshTokenHash: "$refreshTokenHash",
+                        previousRefreshTokenExpiresAt: new Date(Date.now() + REFRESH_REPLAY_GRACE_MS),
+                        refreshTokenHash: newRefreshTokenHash,
+                        expiresAt: getRefreshTokenExpiry(),
+                    },
+                },
+            ],
+            { new: true }
+        );
 
         if (!session) {
+            // A second request from another tab can arrive with the same token while
+            // the first request is rotating it. Serve access restoration during a
+            // short replay grace period without starting another rotation.
+            let replaySession = null;
+            for (let attempt = 0; attempt < 3 && !replaySession; attempt += 1) {
+                if (attempt > 0) {
+                    await new Promise((resolve) => setTimeout(resolve, 25));
+                }
+                replaySession = await Session.findOne({
+                    previousRefreshTokenHash: oldRefreshTokenHash,
+                    previousRefreshTokenExpiresAt: { $gt: new Date() },
+                    revokedAt: null,
+                    expiresAt: { $gt: new Date() },
+                });
+            }
+
+            if (replaySession) {
+                const replayUser = await User.findById(replaySession.user);
+                if (!replayUser) {
+                    await Session.updateOne(
+                        { _id: replaySession._id, revokedAt: null },
+                        { $set: { revokedAt: new Date() } }
+                    );
+                    clearRefreshCookie(res);
+                    return res.status(401).json({
+                        success: false,
+                        message: "User no longer exists",
+                    });
+                }
+
+                return res.status(200).json({
+                    success: true,
+                    message: "Token refresh restored",
+                    data: {
+                        accessToken: generateAccessToken(replayUser),
+                    },
+                });
+            }
+
+            // Detect reuse after the grace period and revoke the session.
+            const reusedSession = await Session.findOne({
+                previousRefreshTokenHash: oldRefreshTokenHash,
+                revokedAt: null,
+            });
+            if (reusedSession) {
+                await Session.updateOne(
+                    { _id: reusedSession._id, revokedAt: null },
+                    { $set: { revokedAt: new Date() } }
+                );
+            }
+
             clearRefreshCookie(res);
 
             return res.status(401).json({
@@ -255,17 +331,6 @@ export const refreshToken = async (req, res, next) => {
                 message: "User no longer exists",
             });
         }
-
-        // Generate new Refresh Token
-        const newRefreshToken = crypto.randomBytes(64).toString("hex");
-
-        const newRefreshTokenHash = hashRefreshToken(newRefreshToken);
-
-        // Rotate the stored Refresh Token Hash
-        session.refreshTokenHash = newRefreshTokenHash;
-        session.expiresAt = getRefreshTokenExpiry();
-
-        await session.save();
 
         // Generate new Access Token
         const accessToken = generateAccessToken(user);
