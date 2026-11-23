@@ -1,14 +1,17 @@
 import mongoose from "mongoose";
 
-const MONGO_URI_LOCAL = process.env.MONGO_URI_LOCAL
-const MONGO_URI_ONLINE = process.env.MONGO_URI_ONLINE
+const MONGO_URI_LOCAL = process.env.MONGO_URI_LOCAL;
+const MONGO_URI_ONLINE = process.env.MONGO_URI_ONLINE;
 
 const dbConnection = async () => {
-    await mongoose.connect(MONGO_URI_ONLINE).then(() => {
-        console.log("Database Connected succefully")
-    }).catch(err => {
-        console.log(err)
-    })
-}
+    try {
+        await mongoose.connect(MONGO_URI_ONLINE);
 
-export default dbConnection
+        console.log("Database Connected Successfully");
+    } catch (error) {
+        console.error("Database Connection Failed:", error);
+        throw error;
+    }
+};
+
+export default dbConnection;
