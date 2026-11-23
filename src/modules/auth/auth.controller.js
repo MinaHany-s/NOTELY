@@ -257,7 +257,7 @@ export const refreshToken = async (req, res, next) => {
                     },
                 },
             ],
-            { new: true }
+            { new: true, updatePipeline: true }
         );
 
         if (!session) {
