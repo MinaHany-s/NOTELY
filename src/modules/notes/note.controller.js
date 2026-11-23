@@ -145,17 +145,13 @@ export const createNote = async (req, res, next) => {
     try {
         const { title, content } = req.body;
 
-        const start = performance.now();
-
         const note = await Note.create({
             title,
             content,
             user: req.user._id,
         });
 
-        const dbTime = performance.now() - start;
 
-        console.log(`Note.create() DB time: ${dbTime.toFixed(2)}ms`);
 
         return res.status(201).json({
             success: true,
