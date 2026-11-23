@@ -10,15 +10,17 @@ import helmet from "helmet";
 import cors from "cors";
 import { globalLimiter } from "./src/middlewares/rateLimtter.js";
 import { page } from "./templates/opening.js";
+import { frontendOrigins } from "./src/config/frontendOrigins.js";
 
 const PORT = process.env.PORT || 5000;
 
 const app = express();
 app.set("trust proxy", 1);
 
-//TODO: Update this with your frontend
 app.use(cors({
-    origin: true,
+    origin(origin, callback) {
+        callback(null, Boolean(origin && frontendOrigins.has(origin)));
+    },
     credentials: true,
 }));
 

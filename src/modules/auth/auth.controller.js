@@ -8,6 +8,8 @@ import Session from "../../../db/models/session.model.js";
 // Token settings
 const ACCESS_TOKEN_EXPIRY = "2h";
 const REFRESH_TOKEN_DAYS = 7;
+const isSecureDeployment =
+    process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
 
 const getRefreshTokenExpiry = () => {
     return new Date(
@@ -42,11 +44,18 @@ const generateAccessToken = (user) => {
 
 const refreshCookieOptions = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    secure: isSecureDeployment,
+    sameSite: isSecureDeployment ? "none" : "lax",
     path: "/api/v1/auth",
     maxAge: REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000,
 };
+
+const clearRefreshCookie = (res) => res.clearCookie("refreshToken", {
+    httpOnly: refreshCookieOptions.httpOnly,
+    secure: refreshCookieOptions.secure,
+    sameSite: refreshCookieOptions.sameSite,
+    path: refreshCookieOptions.path,
+});
 
 // ==================================
 // REGISTER
@@ -227,12 +236,7 @@ export const refreshToken = async (req, res, next) => {
         });
 
         if (!session) {
-            res.clearCookie("refreshToken", {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === "production",
-                sameSite: "lax",
-                path: "/api/v1/auth",
-            });
+            clearRefreshCookie(res);
 
             return res.status(401).json({
                 success: false,
@@ -305,12 +309,7 @@ export const logout = async (req, res, next) => {
             );
         }
 
-        res.clearCookie("refreshToken", {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            path: "/api/v1/auth",
-        });
+        clearRefreshCookie(res);
 
         return res.status(200).json({
             success: true,
