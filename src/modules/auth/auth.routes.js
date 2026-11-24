@@ -14,6 +14,46 @@ import trustedOrigin from "../../middlewares/trustedOrigin.js";
 
 const authRouter = Router();
 
+const refreshDiagnostics = (req, res, next) => {
+    const cookiePresent = Object.prototype.hasOwnProperty.call(
+        req.cookies || {},
+        "refreshToken"
+    );
+    const diagnostics = {
+        cookiePresent,
+        sessionFound: null,
+        storedHashMatched: null,
+        hashMatchType: "not_checked",
+        refreshTokenRejected: false,
+        message: null,
+    };
+
+    res.locals.refreshAuthDiagnostics = diagnostics;
+    console.info("[AUTH_DIAG] REFRESH_COOKIE", JSON.stringify({ cookiePresent }));
+    res.once("finish", () => {
+        let message = diagnostics.message;
+        if (!message) {
+            message = res.statusCode === 403
+                ? "Origin is not allowed"
+                : res.statusCode === 429
+                    ? "Too many requests"
+                    : res.statusCode >= 500
+                        ? "internal_error"
+                        : "request_rejected";
+        }
+        console.info("[AUTH_DIAG] REFRESH_RESULT", JSON.stringify({
+            statusCode: res.statusCode,
+            message,
+            cookiePresent: diagnostics.cookiePresent,
+            sessionFound: diagnostics.sessionFound,
+            storedHashMatched: diagnostics.storedHashMatched,
+            hashMatchType: diagnostics.hashMatchType,
+            refreshTokenRejected: diagnostics.refreshTokenRejected,
+        }));
+    });
+
+    next();
+};
 
 authRouter.post(
     "/register",
@@ -31,6 +71,7 @@ authRouter.post(
 
 authRouter.post(
     "/refresh-token",
+    refreshDiagnostics,
     trustedOrigin,
     refreshLimiter,
     refreshToken
