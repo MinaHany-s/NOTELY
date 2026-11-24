@@ -30,12 +30,6 @@ const hashRefreshToken = (token) => {
         .digest("hex");
 };
 
-const updateRefreshDiagnostics = (res, details) => {
-    if (res.locals.refreshAuthDiagnostics) {
-        Object.assign(res.locals.refreshAuthDiagnostics, details);
-    }
-};
-
 const generateAccessToken = (user) => {
     if (!process.env.JWT_SECRET) {
         throw new Error("JWT_SECRET is not configured");
@@ -237,13 +231,6 @@ export const refreshToken = async (req, res, next) => {
         const oldRefreshToken = req.cookies?.refreshToken;
 
         if (!oldRefreshToken) {
-            updateRefreshDiagnostics(res, {
-                sessionFound: false,
-                storedHashMatched: false,
-                hashMatchType: "none",
-                refreshTokenRejected: true,
-                message: "Refresh token is required",
-            });
             return res.status(401).json({
                 success: false,
                 message: "Refresh token is required",
@@ -274,14 +261,6 @@ export const refreshToken = async (req, res, next) => {
             { new: true, updatePipeline: true }
         );
 
-        if (session) {
-            updateRefreshDiagnostics(res, {
-                sessionFound: true,
-                storedHashMatched: true,
-                hashMatchType: "current",
-            });
-        }
-
         if (!session) {
             // A second request from another tab can arrive with the same token while
             // the first request is rotating it. Serve access restoration during a
@@ -300,11 +279,6 @@ export const refreshToken = async (req, res, next) => {
             }
 
             if (replaySession) {
-                updateRefreshDiagnostics(res, {
-                    sessionFound: true,
-                    storedHashMatched: true,
-                    hashMatchType: "previous_grace",
-                });
                 const replayUser = await User.findById(replaySession.user);
                 if (!replayUser) {
                     await Session.updateOne(
@@ -312,19 +286,12 @@ export const refreshToken = async (req, res, next) => {
                         { $set: { revokedAt: new Date() } }
                     );
                     clearRefreshCookie(res);
-                    updateRefreshDiagnostics(res, {
-                        refreshTokenRejected: true,
-                        message: "User no longer exists",
-                    });
                     return res.status(401).json({
                         success: false,
                         message: "User no longer exists",
                     });
                 }
 
-                updateRefreshDiagnostics(res, {
-                    message: "Token refresh restored",
-                });
                 return res.status(200).json({
                     success: true,
                     message: "Token refresh restored",
@@ -340,28 +307,13 @@ export const refreshToken = async (req, res, next) => {
                 revokedAt: null,
             });
             if (reusedSession) {
-                updateRefreshDiagnostics(res, {
-                    sessionFound: true,
-                    storedHashMatched: true,
-                    hashMatchType: "previous_outside_grace",
-                });
                 await Session.updateOne(
                     { _id: reusedSession._id, revokedAt: null },
                     { $set: { revokedAt: new Date() } }
                 );
-            } else {
-                updateRefreshDiagnostics(res, {
-                    sessionFound: false,
-                    storedHashMatched: false,
-                    hashMatchType: "none",
-                });
             }
 
             clearRefreshCookie(res);
-            updateRefreshDiagnostics(res, {
-                refreshTokenRejected: true,
-                message: "Invalid or expired refresh token",
-            });
 
             return res.status(401).json({
                 success: false,
@@ -375,10 +327,6 @@ export const refreshToken = async (req, res, next) => {
             session.revokedAt = new Date();
             await session.save();
 
-            updateRefreshDiagnostics(res, {
-                refreshTokenRejected: true,
-                message: "User no longer exists",
-            });
             return res.status(401).json({
                 success: false,
                 message: "User no longer exists",
@@ -393,9 +341,6 @@ export const refreshToken = async (req, res, next) => {
             refreshCookieOptions
         );
 
-        updateRefreshDiagnostics(res, {
-            message: "Token refreshed successfully",
-        });
         return res.status(200).json({
             success: true,
             message: "Token refreshed successfully",
@@ -404,9 +349,6 @@ export const refreshToken = async (req, res, next) => {
             },
         });
     } catch (error) {
-        updateRefreshDiagnostics(res, {
-            message: "internal_error",
-        });
         next(error);
     }
 };
