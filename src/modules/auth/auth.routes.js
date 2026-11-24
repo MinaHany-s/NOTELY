@@ -15,11 +15,18 @@ import trustedOrigin from "../../middlewares/trustedOrigin.js";
 const authRouter = Router();
 
 const refreshDiagnostics = (req, res, next) => {
+    const rawDiagnosticId = req.get("x-auth-diag-id");
+    const diagnosticId =
+        typeof rawDiagnosticId === "string" &&
+        /^[A-Za-z0-9-]{1,64}$/.test(rawDiagnosticId)
+            ? rawDiagnosticId
+            : null;
     const cookiePresent = Object.prototype.hasOwnProperty.call(
         req.cookies || {},
         "refreshToken"
     );
     const diagnostics = {
+        diagnosticId,
         cookiePresent,
         sessionFound: null,
         storedHashMatched: null,
@@ -29,7 +36,10 @@ const refreshDiagnostics = (req, res, next) => {
     };
 
     res.locals.refreshAuthDiagnostics = diagnostics;
-    console.info("[AUTH_DIAG] REFRESH_COOKIE", JSON.stringify({ cookiePresent }));
+    console.info("[AUTH_DIAG] REFRESH_COOKIE", JSON.stringify({
+        diagnosticId,
+        cookiePresent,
+    }));
     res.once("finish", () => {
         let message = diagnostics.message;
         if (!message) {
@@ -42,6 +52,7 @@ const refreshDiagnostics = (req, res, next) => {
                         : "request_rejected";
         }
         console.info("[AUTH_DIAG] REFRESH_RESULT", JSON.stringify({
+            diagnosticId: diagnostics.diagnosticId,
             statusCode: res.statusCode,
             message,
             cookiePresent: diagnostics.cookiePresent,
