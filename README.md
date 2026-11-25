@@ -149,8 +149,10 @@ FRONTEND_URL=http://localhost:5173
 
 `SESSION_SECRET` signs the CAPTCHA session cookie and protects stored CAPTCHA
 hashes. Configure a unique, random value of at least 32 characters in each
-environment. CAPTCHA sessions use the existing MongoDB deployment, expire
-automatically, and do not use Redis or an additional session-store package.
+environment. If it is unset, the session key is derived separately from
+`JWT_SECRET`, so existing deployments with that variable can start without
+additional configuration. CAPTCHA sessions use the existing MongoDB deployment,
+expire automatically, and do not use Redis or an additional session-store package.
 
 For production, the frontend proxies `/api/v1` through its own Vercel origin.
 Refresh cookies are host-only, HttpOnly, Secure, and SameSite=Lax by default.

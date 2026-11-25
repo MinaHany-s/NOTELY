@@ -1,13 +1,25 @@
+import crypto from "crypto";
 import session from "express-session";
 import CaptchaSession from "../../db/models/captchaSession.model.js";
 
 const SESSION_COOKIE_MAX_AGE_MS = 10 * 60 * 1000;
 export const CAPTCHA_TTL_MS = 5 * 60 * 1000;
 
-export const sessionSecret = process.env.SESSION_SECRET;
+const configuredSessionSecret = process.env.SESSION_SECRET;
+const jwtSecret = process.env.JWT_SECRET;
+export const sessionSecret =
+  configuredSessionSecret ||
+  (jwtSecret
+    ? crypto
+        .createHmac("sha256", jwtSecret)
+        .update("notely:captcha-session:v1")
+        .digest("hex")
+    : undefined);
 
 if (!sessionSecret || Buffer.byteLength(sessionSecret) < 32) {
-  throw new Error("SESSION_SECRET must contain at least 32 characters");
+  throw new Error(
+    "Configure SESSION_SECRET (at least 32 characters) or JWT_SECRET to enable CAPTCHA sessions"
+  );
 }
 
 const isSecureDeployment =
