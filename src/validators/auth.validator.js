@@ -6,9 +6,11 @@ export const registerSchema = Joi.object({
     lastName: Joi.string().min(2).max(30).required(),
     email: Joi.string().email().required(),
     password: Joi.string().min(8).required(),
+    captcha: Joi.string().trim().min(1).max(10).required(),
 });
 
 export const loginSchema = Joi.object({
     email: Joi.string().email().required(),
     password: Joi.string().required(),
+    captcha: Joi.string().trim().min(1).max(10).required(),
 });

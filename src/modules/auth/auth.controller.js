@@ -4,6 +4,7 @@ import crypto from "crypto";
 
 import User from "../../../db/models/users.model.js";
 import Session from "../../../db/models/session.model.js";
+import { createCaptchaChallenge } from "./captcha.js";
 
 // Token settings
 const ACCESS_TOKEN_EXPIRY = "2h";
@@ -64,6 +65,28 @@ const clearRefreshCookie = (res) => res.clearCookie("refreshToken", {
     path: refreshCookieOptions.path,
     ...(cookieDomain ? { domain: cookieDomain } : {}),
 });
+
+// ==================================
+// CAPTCHA
+// ==================================
+
+export const createCaptcha = (req, res, next) => {
+    try {
+        const challenge = createCaptchaChallenge();
+        req.session.captcha = {
+            hash: challenge.hash,
+            expiresAt: challenge.expiresAt,
+        };
+
+        return res
+            .status(200)
+            .type("image/svg+xml")
+            .set("Cache-Control", "no-store, private")
+            .send(challenge.svg);
+    } catch (error) {
+        return next(error);
+    }
+};
 
 // ==================================
 // REGISTER

@@ -11,11 +11,21 @@ import cors from "cors";
 import { globalLimiter } from "./src/middlewares/rateLimtter.js";
 import { page } from "./templates/opening.js";
 import { frontendOrigins } from "./src/config/frontendOrigins.js";
+import { sessionMiddleware } from "./src/config/session.js";
 
 const PORT = process.env.PORT || 5000;
 
 const app = express();
-app.set("trust proxy", 1);
+const configuredTrustProxyHops = process.env.TRUST_PROXY_HOPS?.trim();
+const trustProxyHops = configuredTrustProxyHops
+    ? Number(configuredTrustProxyHops)
+    : (process.env.VERCEL === "1" ? 1 : 0);
+
+if (!Number.isSafeInteger(trustProxyHops) || trustProxyHops < 0) {
+    throw new Error("TRUST_PROXY_HOPS must be a non-negative integer");
+}
+
+app.set("trust proxy", trustProxyHops);
 
 app.use(cors({
     origin(origin, callback) {
@@ -32,6 +42,7 @@ app.use(express.json({
     limit: "100kb",
 }));
 app.use(cookieParser());
+app.use(sessionMiddleware);
 
 // API Versioning
 const API_V1 = "/api/v1";

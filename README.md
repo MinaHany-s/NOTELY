@@ -30,6 +30,7 @@ https://notely-five-pied.vercel.app/api/v1
 - Protected routes and authorization middleware.
 - Logout and session invalidation.
 - Login rate limiting.
+- CAPTCHA challenges for login and registration.
 
 ### User Management
 - Get current authenticated user.
@@ -137,18 +138,28 @@ Create a `.env` file in the root directory.
 PORT=5000
 NODE_ENV=development
 
-MONGO_URI=your_mongodb_connection_string
+MONGO_URI_ONLINE=your_mongodb_connection_string
 
 JWT_SECRET=your_access_token_secret
 REFRESH_TOKEN_SECRET=your_refresh_token_secret
+SESSION_SECRET=at_least_32_random_characters
 
 FRONTEND_URL=http://localhost:5173
 ```
+
+`SESSION_SECRET` signs the CAPTCHA session cookie and protects stored CAPTCHA
+hashes. Configure a unique, random value of at least 32 characters in each
+environment. CAPTCHA sessions use the existing MongoDB deployment, expire
+automatically, and do not use Redis or an additional session-store package.
 
 For production, the frontend proxies `/api/v1` through its own Vercel origin.
 Refresh cookies are host-only, HttpOnly, Secure, and SameSite=Lax by default.
 Set `COOKIE_SAME_SITE=none` only when a separate cross-site client explicitly
 needs cookie authentication; `Secure` is enforced whenever SameSite=None is used.
+`COOKIE_DOMAIN` is optional and should only be set when cookies must be shared
+across subdomains.
+`TRUST_PROXY_HOPS` defaults to `1` on Vercel and `0` elsewhere. Set it to the
+exact number of trusted reverse proxies in other deployments.
 
 **Important:** These are example variable names. Check the backend configuration and `.env.example` to use the exact variable names expected by the application.
 
@@ -186,6 +197,7 @@ All endpoints are prefixed with:
 |---|---|---|
 | POST | `/auth/register` | Create a new account |
 | POST | `/auth/login` | Authenticate user |
+| GET | `/auth/captcha` | Generate a CAPTCHA image and session |
 | POST | `/auth/refresh-token` | Refresh Access Token |
 | POST | `/auth/logout` | Logout and invalidate session |
 
